@@ -37,23 +37,31 @@ from provider.zipcodes import ZIPImporter
 from iprange import IPRange
 from city import City
 from zipcode import ZIPCode
+from provider.geocitylite import GeoCityLiteImporter
 
-__author__="dvirsky"
-__date__ ="$Mar 25, 2011 4:44:22 PM$"
+__author__ = "dvirsky"
+__date__ = "$Mar 25, 2011 4:44:22 PM$"
 
 redis_host = 'localhost'
 redis_port = 6379
 redis_db = 8
 
 def importGeonames(fileName):
-    
+
     global redis_host, redis_port, redis_db
     importer = GeonamesImporter(fileName, redis_host, redis_port, redis_db)
     if not importer.runImport():
         print "Could not import geonames database..."
         sys.exit(1)
 
-    
+
+def importGeoCityLite(fileName):
+
+    print redis_host, redis_port, redis_db
+    importer = GeoCityLiteImporter(fileName, redis_host, redis_port, redis_db)
+    if not importer.runImport(True):
+        print "Could not import GeoCityLite database..."
+        sys.exit(1)
 
 
 def importIP2Location(fileName):
@@ -73,26 +81,26 @@ def importZIPCode(fileName):
         print "Could not import geonames database..."
         sys.exit(1)
 
-    
+
 def resolveIP(ip):
     global redis_host, redis_port, redis_db
-    r = redis.Redis(host = redis_host, port = redis_port, db = redis_db)
+    r = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
 
-    loc = IPRange.getZIP(ip, r)
+    loc = IPRange.getCity(ip, r)
     print loc
-    
+
 
 def resolveCoords(lat, lon):
     global redis_host, redis_port, redis_db
-    r = redis.Redis(host = redis_host, port = redis_port, db = redis_db)
-    loc = ZIPCode.getByLatLon(lat, lon, r)
+    r = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
+    loc = City.getByLatLon(lat, lon, r)
     print loc
 
 
 if __name__ == "__main__":
-    
+
     logging.basicConfig(
-                level = logging.INFO,
+                level=logging.INFO,
                 format='%(asctime)s %(levelname)s in %(module)s.%(funcName)s (%(filename)s:%(lineno)s): %(message)s',
                 )
     #build options parser
@@ -101,6 +109,10 @@ if __name__ == "__main__":
     parser.add_option("-g", "--import_geonames", dest="import_geonames",
                       action='store_true', default=False,
                       help='Import locations from Geonames data dump')
+
+    parser.add_option("-c", "--import_geocitylite", dest="import_geocitylite",
+                      action='store_true', default=False,
+                      help='Import ip ranges from GeoCityLite dumps')
 
     parser.add_option("-i", "--import_ip2coutnry", dest="import_ip2location",
                       action='store_true', default=False,
@@ -112,41 +124,44 @@ if __name__ == "__main__":
     parser.add_option("-f", "--file", dest="import_file",
                   help="Location of the file we want to import", metavar="FILE")
 
-    parser.add_option("-P", "--resolve_ip", dest="resolve_ip", default = None,
+    parser.add_option("-P", "--resolve_ip", dest="resolve_ip", default=None,
                       help="resolve an ip address to location", metavar="IP_ADDR")
 
 
-    parser.add_option("-L", "--resolve_latlon", dest="resolve_latlon", default = None,
+    parser.add_option("-L", "--resolve_latlon", dest="resolve_latlon", default=None,
                       help="resolve an lat,lon pair into location", metavar="LAT,LON")
 
 
-    parser.add_option("-H", "--redis_host", dest="redis_host", default = 'localhost',
+    parser.add_option("-H", "--redis_host", dest="redis_host", default='localhost',
                       help="redis host to use", metavar="HOST")
 
-    parser.add_option("-p", "--redis_port", dest="redis_port", default = 6379,
+    parser.add_option("-p", "--redis_port", dest="redis_port", default=6379,
                       type="int", help="redis port to use", metavar="PORT")
 
-    parser.add_option("-n", "--redis_database", dest="redis_db", default = 8,
+    parser.add_option("-n", "--redis_database", dest="redis_db", default=8,
                       type="int", help="redis database to use (default 8)", metavar="DB_NUM")
-    
+
 
     (options, args) = parser.parse_args()
     redis_host = options.redis_host
     redis_port = options.redis_port
     redis_db = options.redis_db
-    
+
     if options.import_geonames:
         importGeonames(options.import_file)
-        
+
+    elif options.import_geocitylite:
+        importGeoCityLite(options.import_file)
+
     elif options.import_ip2location:
         importIP2Location(options.import_file)
 
     elif options.import_zipcodes:
         importZIPCode(options.import_file)
-        
+
     elif options.resolve_ip:
         resolveIP(options.resolve_ip)
-        
+
     elif options.resolve_latlon:
         coords = [float(p) for p in options.resolve_latlon.split(',')]
         resolveCoords(*coords)

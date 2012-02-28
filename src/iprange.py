@@ -34,7 +34,7 @@ import struct
 class IPRange(object):
 
     _indexKey = 'iprange:locations'
-    def __init__(self, rangeMin, rangeMax, lat, lon, zipcode = ''):
+    def __init__(self, rangeMin, rangeMax, lat, lon, zipcode=''):
 
         self.rangeMin = rangeMin
         self.rangeMax = rangeMax
@@ -44,7 +44,7 @@ class IPRange(object):
 
         #encode a numeric geohash key
         self.geoKey = hasher.encode(lat, lon)
-        
+
         self.key = '%s:%s:%s' % (self.rangeMin, self.rangeMax, self.zipcode)
 
     def save(self, redisConn):
@@ -52,10 +52,10 @@ class IPRange(object):
         Save an IP range to redis
         @param redisConn a redis connectino or pipeline
         """
-        
+
         redisConn.zadd(self._indexKey, '%s@%s' % (self.geoKey, self.key) , self.rangeMax)
-        
-        
+
+
     def __str__(self):
         """
         textual representation
@@ -67,31 +67,34 @@ class IPRange(object):
         """
         Get a range and all its data by ip
         """
-        
+
         ipnum = IPRange.ip2long(ip)
 
         #get the location record from redis
-        record = redisConn.zrangebyscore(IPRange._indexKey, ipnum ,'+inf', 0, 1, True)
+        record = redisConn.zrangebyscore(IPRange._indexKey, ipnum , '+inf', 0, 1, True)
         if not record:
+            print 'IP address %s not found.' % ip
             #not found? k!
             return None
 
         #extract location id
         try:
-            geoKey,rng = record[0][0].split('@')
-            
-            lat,lon = hasher.decode(long(geoKey))
-            
-            rngMin, rngMax, zipcode =  rng.split(':')
+            geoKey, rng = record[0][0].split('@')
+
+            lat, lon = hasher.decode(long(geoKey))
+
+            rngMin, rngMax, zipcode = rng.split(':')
             rngMin = int(rngMin)
             rngMax = int(rngMax)
         except IndexError:
+            print 'geoInfo(%s) for IP %s not found.' % (record, ip)
             return None
 
         #address not in any range
         if not rngMin <= ipnum <= rngMax:
+            print 'IP %s not in range.' % ip
             return None
-        
+
         return IPRange(rngMin, rngMax, lat, lon, zipcode)
 
     @staticmethod
@@ -102,8 +105,9 @@ class IPRange(object):
         """
 
         range = IPRange.get(ip, redisConn)
-        
+
         if not range or not re.match('^[0-9]{5}$', range.zipcode):
+            print 'IP %s not in range or does not have a zipcode. (%s)' % (ip, range)
             return None
 
         return ZIPCode.load('ZIPCode:%s' % range.zipcode, redisConn)
@@ -126,7 +130,7 @@ class IPRange(object):
         if not range:
             return None
 
-        
+
 
         #load a location by the
         return City.getByGeohash(hasher.encode(range.lat, range.lon), redisConn)
@@ -139,4 +143,3 @@ class IPRange(object):
         """
         ip_packed = socket.inet_aton(ip)
         return struct.unpack("!L", ip_packed)[0]
-    
